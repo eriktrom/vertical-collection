@@ -49,12 +49,10 @@ export default class VirtualComponent {
   }
 
   recycle(newContent, newIndex) {
-    assert(`You cannot set an item's content to undefined`, newContent);
-
     set(this, 'index', newIndex);
 
     if (this.content !== newContent) {
-      set(this, 'content', newContent);
+      set(this, 'content', newContent || {});
     }
   }
 
