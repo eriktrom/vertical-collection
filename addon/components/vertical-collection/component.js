@@ -201,7 +201,7 @@ const VerticalCollection = Component.extend({
     if (containerSelector === 'body') {
       this._scrollContainer = Container;
     } else {
-      this._scrollContainer = containerSelector ? closestElement(containerSelector) : this.element.parentNode;
+      this._scrollContainer = containerSelector ? closestElement(containerSelector) : this.element.parentElement;
     }
 
     // Initialize the Radar and set the scroll state
