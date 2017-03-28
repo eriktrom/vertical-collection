@@ -17,13 +17,13 @@ export function debug() {
 export function debugOnError(msg, conditional) {
   if (!conditional) {
     console.error(msg); // eslint-disable-line no-console
-    debugger; // eslint-disable-line no-debugger
+    // debugger; // eslint-disable-line no-debugger
   }
 }
 
 export function assert(msg, conditional) {
   if (!conditional) {
-    throw new Error(msg);
+    console.error(msg);
   }
 }
 
