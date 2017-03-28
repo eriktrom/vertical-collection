@@ -12,8 +12,10 @@ import StaticRadar from 'vertical-collection/-private/data-view/radar/static-rad
 
 import Container from 'vertical-collection/-private/data-view/container';
 import getArray from 'vertical-collection/-private/data-view/utils/get-array';
-import { addScrollHandler, removeScrollHandler } from 'vertical-collection/-private/data-view/utils/scroll-handler';
-import { addResizeHandler, removeResizeHandler } from 'vertical-collection/-private/data-view/utils/resize-handler';
+import {
+  addScrollHandler,
+  removeScrollHandler
+} from 'vertical-collection/-private/data-view/utils/scroll-handler';
 
 const {
   computed,
@@ -201,7 +203,7 @@ const VerticalCollection = Component.extend({
     if (containerSelector === 'body') {
       this._scrollContainer = Container;
     } else {
-      this._scrollContainer = containerSelector ? closestElement(containerSelector) : this.element.parentElement;
+      this._scrollContainer = containerSelector ? closestElement(this.element.parentNode, containerSelector) : this.element.parentNode;
     }
 
     // Initialize the Radar and set the scroll state
@@ -251,23 +253,26 @@ const VerticalCollection = Component.extend({
 
     const minHeight = this.get('_minHeight');
     const items = this._items;
-    const maxIndex = items.length;
+    const maxIndex = items.length - 1;
 
     let index = 0;
 
     if (idForFirstItem) {
       for (let i = 0; i < maxIndex; i++) {
-        if (keyForItem(items[i], key, i) === idForFirstItem) {
+        if (keyForItem(items[i], key, i) == idForFirstItem) {
           index = i;
           break;
         }
       }
 
       scrollPosition = index * minHeight;
+    } else if (renderFromLast) {
+      // If no id was set and `renderFromLast` is true, start from the bottom
+      scrollPosition = maxIndex * minHeight;
+    }
 
-      if (renderFromLast) {
-        scrollPosition -= this._radar._scrollContainerHeight;
-      }
+    if (renderFromLast) {
+      scrollPosition -= (this._radar.scrollContainerHeight - minHeight);
     }
 
     // The container element needs to have some height in order for us to set the scroll position
@@ -287,24 +292,17 @@ const VerticalCollection = Component.extend({
       }
     };
 
-    this._itemContainerResizeHandler = () => {
-      this._radar.scheduleUpdate();
-    };
-
-    this._windowResizeHandler = () => {
-      this._radar.scrollContainer = this._scrollContainer;
-      this._radar.scheduleUpdate();
+    this._resizeHandler = () => {
+      this._initializeRadar();
     };
 
     addScrollHandler(this._scrollContainer, this._scrollHandler);
-    addResizeHandler(this.element, this._itemContainerResizeHandler);
-    addResizeHandler(window, this._windowResizeHandler);
+    Container.addEventListener('resize', this._resizeHandler);
   },
 
-  willRemoveElement() {
+  willDestroy() {
     removeScrollHandler(this._scrollContainer, this._scrollHandler);
-    removeResizeHandler(this.element, this._itemContainerResizeHandler);
-    removeResizeHandler(window, this._windowResizeHandler);
+    Container.removeEventListener('resize', this._resizeHandler);
   },
 
   init() {
@@ -332,7 +330,7 @@ VerticalCollection.reopenClass({
 });
 
 function isPrepend(lenDiff, newItems, key, oldFirstKey, oldLastKey) {
-  if (lenDiff <= 0) {
+  if (lenDiff <= 0 || lenDiff >= newItems.length) {
     return false;
   }
 
@@ -343,7 +341,7 @@ function isPrepend(lenDiff, newItems, key, oldFirstKey, oldLastKey) {
 }
 
 function isAppend(lenDiff, newItems, key, oldFirstKey, oldLastKey) {
-  if (lenDiff <= 0) {
+  if (lenDiff <= 0 || lenDiff >= newItems.length) {
     return false;
   }
 
