@@ -50,6 +50,10 @@ export class Scheduler {
   }
 
   flush() {
+    return run.once(this, this._flushOnce);
+  }
+
+  _flushOnce() {
     let i, q;
 
     // run.begin();
@@ -61,7 +65,9 @@ export class Scheduler {
         q[i]();
       }
     }
+    // run.end();
 
+    // run.begin();
     if (this.layout.length) {
       q = this.layout;
       this.layout = [];
@@ -81,7 +87,9 @@ export class Scheduler {
         q[i]();
       }
     }
+    // run.end();
 
+    // run.begin();
     if (this.affect.length) {
       q = this.affect;
       this.affect = [];
