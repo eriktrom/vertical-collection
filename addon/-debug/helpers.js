@@ -16,14 +16,14 @@ export function debug() {
 
 export function debugOnError(msg, conditional) {
   if (!conditional) {
-    console.error(msg); // eslint-disable-line no-console
+    Logger.debug('Vertical Collection - ERROR:', msg); // eslint-disable-line no-console
     // debugger; // eslint-disable-line no-debugger
   }
 }
 
 export function assert(msg, conditional) {
   if (!conditional) {
-    console.error(msg);
+    Logger.debug('Vertical Collection - BAD ASSERT:', msg); // eslint-disable-line no-console
   }
 }
 
