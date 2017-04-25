@@ -4,11 +4,14 @@ import scheduler from 'vertical-collection/-private/scheduler';
 import Token from 'vertical-collection/-private/scheduler/token';
 
 import VirtualComponent from 'vertical-collection/-private/data-view/virtual-component';
+import insertRangeBefore from 'vertical-collection/-private/data-view/utils/insert-range-before';
+import objectAt from 'vertical-collection/-private/data-view/utils/object-at';
 
 import { assert } from 'vertical-collection/-debug/helpers';
 
 const {
   A,
+  get,
   set
 } = Ember;
 
@@ -27,15 +30,14 @@ export default class Radar {
     this.bufferSize = 0;
     this.renderFromLast = 0;
 
-    this.virtualComponents = A();
+    this._occludedContentBefore = new VirtualComponent(document.createElement('occluded-content'));
+    this._occludedContentAfter = new VirtualComponent(document.createElement('occluded-content'));
+
+    this.virtualComponents = A([this._occludedContentBefore, this._occludedContentAfter]);
     this.orderedComponents = [];
   }
 
-  init(...args) {
-    this.setContainerState(...args);
-  }
-
-  setContainerState(itemContainer, scrollContainer, minHeight, bufferSize, renderFromLast) {
+  init(itemContainer, scrollContainer, minHeight, bufferSize, renderFromLast) {
     this.itemContainer = itemContainer;
     this.scrollContainer = scrollContainer;
 
@@ -55,7 +57,7 @@ export default class Radar {
     }
 
     this.orderedComponents = null;
-    this.virtualComponents = null;
+    set(this, 'virtualComponents', null);
 
   }
 
@@ -76,20 +78,18 @@ export default class Radar {
    * @private
    */
   scheduleUpdate() {
-    if (!this._nextUpdate) {
-      this._nextUpdate = this.schedule('sync', () => {
-        this._nextUpdate = null;
-        this._scrollTop = this.scrollContainer.scrollTop;
-
-        const delta = this._updateIndexes();
-        this._updateVirtualComponents(delta);
-      });
+    if (this._nextUpdate) {
+      return;
     }
 
-    if (!this._nextDidUpdate) {
-      this._nextDidUpdate = this.schedule('affect', () => {
-        this._nextDidUpdate = null;
+    this._nextUpdate = this.schedule('sync', () => {
+      this._nextUpdate = null;
+      this._scrollTop = this.scrollContainer.scrollTop;
 
+      const delta = this._updateIndexes();
+      this._updateVirtualComponents(delta);
+
+      this.schedule('affect', () => {
         if (this._prependOffset !== 0) {
           this.scrollTop += this._prependOffset;
           this._prependOffset = 0;
@@ -97,11 +97,11 @@ export default class Radar {
 
         this.didUpdate();
       });
-    }
+    });
   }
 
   get totalItems() {
-    return this.items ? this.items.length : 0;
+    return this.items ? get(this.items, 'length') : 0;
   }
 
   set itemContainer(itemContainer) {
@@ -188,6 +188,8 @@ export default class Radar {
       items,
       orderedComponents,
       itemContainer,
+      _occludedContentBefore,
+      _occludedContentAfter,
 
       firstItemIndex,
       lastItemIndex,
@@ -203,22 +205,28 @@ export default class Radar {
         let movedComponents = orderedComponents.splice(-offsetAmount);
         orderedComponents.unshift(...movedComponents);
 
-        VirtualComponent.moveComponents(itemContainer, movedComponents[0], movedComponents[movedComponents.length - 1], true);
+        const firstNode = movedComponents[0].realUpperBound;
+        const lastNode = movedComponents[movedComponents.length - 1].realLowerBound;
+
+        insertRangeBefore(_occludedContentBefore.realLowerBound.nextSibling, firstNode, lastNode);
       } else if (itemDelta > 0) {
         // Scrolling down
         let movedComponents = orderedComponents.splice(0, offsetAmount);
         orderedComponents.push(...movedComponents);
 
-        VirtualComponent.moveComponents(itemContainer, movedComponents[0], movedComponents[movedComponents.length - 1], false);
+        const firstNode = movedComponents[0].realUpperBound;
+        const lastNode = movedComponents[movedComponents.length - 1].realLowerBound;
+
+        insertRangeBefore(_occludedContentAfter.realUpperBound, firstNode, lastNode);
       }
     }
 
     for (let i = 0, itemIndex = firstItemIndex; itemIndex <= lastItemIndex; i++, itemIndex++) {
-      orderedComponents[i].recycle(items[itemIndex], itemIndex);
+      orderedComponents[i].recycle(objectAt(items, itemIndex), itemIndex);
     }
 
-    itemContainer.style.marginTop = `${totalBefore}px`;
-    itemContainer.style.marginBottom = `${totalAfter}px`;
+    _occludedContentBefore.element.style.height = `${totalBefore}px`;
+    _occludedContentAfter.element.style.height = `${totalAfter}px`;
     itemContainer.style.minHeight = '';
   }
 
@@ -249,7 +257,8 @@ export default class Radar {
       minHeight,
       virtualComponents,
       orderedComponents,
-      totalItems
+      totalItems,
+      items
     } = this;
 
     // The total number of components is determined by the minimum number required to span the
@@ -257,27 +266,25 @@ export default class Radar {
     // performant, even if mean item size is above the minimum.
     const totalHeight = scrollContainerHeight + (scrollContainerHeight * bufferSize * 2);
     const totalComponents = Math.min(totalItems, Math.ceil(totalHeight / minHeight) + 1);
-    const delta = totalComponents - virtualComponents.get('length');
+    const delta = totalComponents - orderedComponents.length;
 
     if (delta > 0) {
-      for (let i = 0; i < delta; i++) {
-        let component = VirtualComponent.create(this.token);
-        set(component, 'content', {});
+      const firstItemIndex = orderedComponents.length > 0 ? orderedComponents[orderedComponents.length - 1].index + 1 : 0;
 
-        virtualComponents.pushObject(component);
+      for (let i = 0; i < delta; i++) {
+        let component = new VirtualComponent();
+        set(component, 'content', objectAt(items, firstItemIndex + i));
+
+        virtualComponents.insertAt(virtualComponents.get('length') - 1, component);
         orderedComponents.push(component);
       }
+    } else if (delta < 0) {
+      for (let i = delta; i < 0; i++) {
+        let component = orderedComponents.pop();
 
-      this.schedule('sync', () => {
-        const firstIndex = orderedComponents.length - delta;
-        const lastIndex = orderedComponents.length - 1;
-
-        VirtualComponent.moveComponents(this.itemContainer, orderedComponents[firstIndex], orderedComponents[lastIndex]);
-
-        for (let i = firstIndex; i <= lastIndex; i++) {
-          orderedComponents[i].inDOM = true;
-        }
-      });
+        virtualComponents.removeObject(component);
+        component.destroy();
+      }
     }
   }
 
@@ -301,6 +308,8 @@ export default class Radar {
 
   resetItems(items) {
     this.items = items;
+    this.firstItemIndex = null;
+    this.lastItemIndex = null;
 
     this._updateVirtualComponentPool();
     this.scheduleUpdate();

@@ -3,6 +3,7 @@ import Ember from 'ember';
 import layout from './template';
 
 import keyForItem from 'vertical-collection/-private/ember/utils/key-for-item';
+import { SUPPORTS_INVERSE_BLOCK } from 'vertical-collection/-private/ember/compatibility';
 
 import estimateElementHeight from 'vertical-collection/-private/utils/element/estimate-element-height';
 import closestElement from 'vertical-collection/-private/utils/element/closest';
@@ -11,42 +12,40 @@ import DynamicRadar from 'vertical-collection/-private/data-view/radar/dynamic-r
 import StaticRadar from 'vertical-collection/-private/data-view/radar/static-radar';
 
 import Container from 'vertical-collection/-private/data-view/container';
-import getArray from 'vertical-collection/-private/data-view/utils/get-array';
+import objectAt from 'vertical-collection/-private/data-view/utils/object-at';
 import {
   addScrollHandler,
   removeScrollHandler
 } from 'vertical-collection/-private/data-view/utils/scroll-handler';
 
+import { assert } from 'vertical-collection/-debug/helpers';
+
 const {
   computed,
   Component,
-  run,
-  String: { htmlSafe },
-  VERSION
+  get,
+  run
 } = Ember;
 
 const VerticalCollection = Component.extend({
   layout,
 
-  /*
-   * If itemTagName is blank or null, the `vertical-collection` will [tag match](../addon/utils/get-tag-descendant.js)
-   * with the `vertical-item`.
-   */
   tagName: 'vertical-collection',
-  boxStyle: htmlSafe(''),
 
   key: '@identity',
 
   // –––––––––––––– Required Settings
 
-  minHeight: 75,
+  minHeight: null,
 
   // usable via {{#vertical-collection <items-array>}}
   items: null,
 
+  // deprecated, only for use in Ember 1.11
+  content: null,
+
   // –––––––––––––– Optional Settings
-  alwaysRemeasure: false,
-  alwaysUseDefaultHeight: computed.not('alwaysRemeasure'),
+  staticHeight: false,
 
   /*
    * A selector string that will select the element from
@@ -70,13 +69,6 @@ const VerticalCollection = Component.extend({
 
   // –––––––––––––– Initial Scroll State
   /*
-   *  If set, this will be used to set
-   *  the scroll position at which the
-   *  component initially renders.
-   */
-  scrollPosition: 0,
-
-  /*
    * If set, upon initialization the scroll
    * position will be set such that the item
    * with the provided id is at the top left
@@ -96,8 +88,12 @@ const VerticalCollection = Component.extend({
 
   // –––––––––––––– @private
 
+  _items: computed.or('items', 'content'),
+
   _minHeight: computed('minHeight', function() {
     const minHeight = this.get('minHeight');
+
+    assert('Must provide a `minHeight` value to vertical-collection', minHeight !== null);
 
     if (typeof minHeight === 'string') {
       return estimateElementHeight(this.element, minHeight);
@@ -106,20 +102,16 @@ const VerticalCollection = Component.extend({
     }
   }),
 
-  isEmpty: computed.empty('items'),
+  supportsInverse: SUPPORTS_INVERSE_BLOCK,
 
-  supportsInverse: computed(function() {
-    // This is not a direct semver comparison, just a standard JS String comparison.
-    // It happens to work for the cases we need to compare (since we don't support < 1.11)
-    return VERSION >= '1.13.0';
-  }),
-
+  isEmpty: computed.empty('_items'),
   shouldYieldToInverse: computed.and('isEmpty', 'supportsInverse'),
 
   _sendActions() {
-    const {
-      _items,
+    const items = this.get('_items');
+    const itemsLength = get(items, 'length');
 
+    const {
       _prevFirstItemIndex,
       _prevLastItemIndex,
       _prevFirstVisibleIndex,
@@ -133,29 +125,29 @@ const VerticalCollection = Component.extend({
       lastVisibleIndex
     } = this._radar;
 
-    if (firstItemIndex === 0 && firstItemIndex !== _prevFirstItemIndex) {
-      this.sendAction('firstReached', _items[firstItemIndex], firstItemIndex);
-    }
-
-    if (lastItemIndex === _items.length - 1 && lastItemIndex !== _prevLastItemIndex) {
-      this.sendAction('lastReached', _items[lastItemIndex], lastItemIndex);
-    }
-
-    if (firstVisibleIndex !== _prevFirstVisibleIndex) {
-      this.sendAction('firstVisibleChanged', _items[firstVisibleIndex], firstVisibleIndex);
-    }
-
-    if (lastVisibleIndex !== _prevLastVisibleIndex) {
-      this.sendAction('lastVisibleChanged', _items[lastVisibleIndex], lastVisibleIndex);
-    }
-
     this._prevFirstItemIndex = firstItemIndex;
     this._prevLastItemIndex = lastItemIndex;
     this._prevFirstVisibleIndex = firstVisibleIndex;
     this._prevLastVisibleIndex = lastVisibleIndex;
+
+    if (firstItemIndex === 0 && firstItemIndex !== _prevFirstItemIndex) {
+      this.sendAction('firstReached', objectAt(items, firstItemIndex), firstItemIndex);
+    }
+
+    if (lastItemIndex === itemsLength - 1 && lastItemIndex !== _prevLastItemIndex) {
+      this.sendAction('lastReached', objectAt(items, lastItemIndex), lastItemIndex);
+    }
+
+    if (firstVisibleIndex !== _prevFirstVisibleIndex) {
+      this.sendAction('firstVisibleChanged', objectAt(items, firstVisibleIndex), firstVisibleIndex);
+    }
+
+    if (lastVisibleIndex !== _prevLastVisibleIndex) {
+      this.sendAction('lastVisibleChanged', objectAt(items, lastVisibleIndex), lastVisibleIndex);
+    }
   },
 
-  radar: computed('items.[]', function() {
+  radar: computed('_items.[]', function() {
     const {
       _radar,
 
@@ -164,14 +156,19 @@ const VerticalCollection = Component.extend({
       _prevLastKey
     } = this;
 
-    const items = getArray(this.get('items') || this.get('content'));
-    const key = this.get('key');
-    const lenDiff = items.length - (_prevItemsLength || 0);
+    const items = this.get('_items');
+    const itemsLength = get(items, 'length');
 
-    this._items = items;
-    this._prevItemsLength = items.length;
-    this._prevFirstKey = keyForItem(items[0], key, 0);
-    this._prevLastKey = keyForItem(items[items.length - 1], key, items.length - 1);
+    const key = this.get('key');
+    const lenDiff = itemsLength - (_prevItemsLength || 0);
+
+    if (itemsLength > 0) {
+      this._prevItemsLength = itemsLength;
+      this._prevFirstKey = keyForItem(objectAt(items, 0), key, 0);
+      this._prevLastKey = keyForItem(objectAt(items, itemsLength - 1), key, itemsLength - 1);
+    } else {
+      this._prevItemsLength = this._prevFirstKey = this._prevLastKey = null;
+    }
 
     if (isPrepend(lenDiff, items, key, _prevFirstKey, _prevLastKey)) {
       this._prevFirstItemIndex += lenDiff;
@@ -187,17 +184,8 @@ const VerticalCollection = Component.extend({
     return this._radar;
   }),
 
-  didUpdateAttrs() {
-    this._initializeRadar();
-  },
-
   // –––––––––––––– Setup/Teardown
   didInsertElement() {
-    // The rendered {{each}} is removed from the DOM, but a reference is kept, allowing Glimmer to
-    // continue rendering to the node. This enables the manual diffing strategy described above.
-    this._virtualComponentRenderer = this.element.getElementsByClassName('virtual-component-renderer')[0];
-    this.element.removeChild(this._virtualComponentRenderer);
-
     const containerSelector = this.get('containerSelector');
 
     if (containerSelector === 'body') {
@@ -210,24 +198,10 @@ const VerticalCollection = Component.extend({
     this._initializeRadar();
     this._initializeScrollState();
     this._initializeEventHandlers();
-
-    console.timeEnd('vertical-collection-init'); // eslint-disable-line no-console
-  },
-
-  _isEarthquake(top) {
-    if (Math.abs(this._lastEarthquake - top) > this.get('_minHeight') / 2) {
-      this._lastEarthquake = top;
-
-      return true;
-    }
-
-    return false;
   },
 
   /*
-   * Set all of the Radar's properties, including `items`. This is a separate function from
-   * `_resetRadar` because it needs to set `items` on the Radar _after_ minHeight has been set, but
-   * _before_ we update the VirtualComponentPool and schedule an update. In the normal
+   * Set all of the Radar's base properties.
    *
    * @private
    */
@@ -245,50 +219,47 @@ const VerticalCollection = Component.extend({
   },
 
   _initializeScrollState() {
-    let scrollPosition = this.get('scrollPosition');
-
     const renderFromLast = this.get('renderFromLast');
     const idForFirstItem = this.get('idForFirstItem');
     const key = this.get('key');
 
     const minHeight = this.get('_minHeight');
-    const items = this._items;
-    const maxIndex = items.length - 1;
+    const items = this.get('_items');
+    const totalItems = get(items, 'length');
 
-    let index = 0;
+    let visibleTop = 0;
 
     if (idForFirstItem) {
-      for (let i = 0; i < maxIndex; i++) {
-        if (keyForItem(items[i], key, i) == idForFirstItem) {
-          index = i;
+      for (let i = 0; i < totalItems - 1; i++) {
+        if (keyForItem(objectAt(items, i), key, i) == idForFirstItem) {
+          visibleTop = i * minHeight;
           break;
         }
       }
 
-      scrollPosition = index * minHeight;
     } else if (renderFromLast) {
       // If no id was set and `renderFromLast` is true, start from the bottom
-      scrollPosition = maxIndex * minHeight;
+      visibleTop = (totalItems - 1) * minHeight;
     }
 
     if (renderFromLast) {
-      scrollPosition -= (this._radar.scrollContainerHeight - minHeight);
+      visibleTop -= (this._radar.scrollContainerHeight - minHeight);
     }
 
     // The container element needs to have some height in order for us to set the scroll position
     // on initialization, so we set this min-height property to radar's total
-    this.element.style.minHeight = `${this._radar.total}px`;
+    this.element.style.minHeight = `${minHeight * totalItems}px`;
 
-    this._radar.visibleTop = scrollPosition;
-
-    this._scrollContainer.scrollTop = this._radar.scrollTop;
-    this._lastEarthquake = this._radar.scrollTop;
+    this._radar.visibleTop = visibleTop;
   },
 
   _initializeEventHandlers() {
+    this._lastEarthquake = this._radar.scrollTop;
+
     this._scrollHandler = ({ top }) => {
-      if (this._isEarthquake(top)) {
+      if (Math.abs(this._lastEarthquake - top) > this.get('_minHeight') / 2) {
         this._radar.scheduleUpdate();
+        this._lastEarthquake = top;
       }
     };
 
@@ -301,27 +272,22 @@ const VerticalCollection = Component.extend({
   },
 
   willDestroy() {
+    this._radar.destroy();
+    run.cancel(this._nextSendActions);
+
     removeScrollHandler(this._scrollContainer, this._scrollHandler);
     Container.removeEventListener('resize', this._resizeHandler);
   },
 
   init() {
-    console.time('vertical-collection-init'); // eslint-disable-line no-console
     this._super();
 
-    const RadarClass = this.get('alwaysRemeasure') ? DynamicRadar : StaticRadar;
+    const RadarClass = this.get('staticHeight') ? StaticRadar : DynamicRadar;
 
     this._radar = new RadarClass();
-
     this._radar.didUpdate = () => {
-      run.next(() => this._sendActions());
+      this._nextSendActions = run.schedule('afterRender', () => this._sendActions());
     };
-  },
-  actions: {
-    heightDidChange(component) {
-      component.hasBeenMeasured = false;
-      this._radar.scheduleUpdate();
-    }
   }
 });
 
@@ -330,34 +296,40 @@ VerticalCollection.reopenClass({
 });
 
 function isPrepend(lenDiff, newItems, key, oldFirstKey, oldLastKey) {
-  if (lenDiff <= 0 || lenDiff >= newItems.length) {
+  const newItemsLength = get(newItems, 'length');
+
+  if (lenDiff <= 0 || lenDiff >= newItemsLength || newItemsLength === 0) {
     return false;
   }
 
-  const newFirstKey = keyForItem(newItems[lenDiff], key, lenDiff);
-  const newLastKey = keyForItem(newItems[newItems.length - 1], key, newItems.length - 1);
+  const newFirstKey = keyForItem(objectAt(newItems, lenDiff), key, lenDiff);
+  const newLastKey = keyForItem(objectAt(newItems, newItemsLength - 1), key, newItemsLength - 1);
 
   return oldFirstKey === newFirstKey && oldLastKey === newLastKey;
 }
 
 function isAppend(lenDiff, newItems, key, oldFirstKey, oldLastKey) {
-  if (lenDiff <= 0 || lenDiff >= newItems.length) {
+  const newItemsLength = get(newItems, 'length');
+
+  if (lenDiff <= 0 || lenDiff >= newItemsLength || newItemsLength === 0) {
     return false;
   }
 
-  const newFirstKey = keyForItem(newItems[0], key, 0);
-  const newLastKey = keyForItem(newItems[newItems.length - lenDiff - 1], key, newItems.length - lenDiff - 1);
+  const newFirstKey = keyForItem(objectAt(newItems, 0), key, 0);
+  const newLastKey = keyForItem(objectAt(newItems, newItemsLength - lenDiff - 1), key, newItemsLength - lenDiff - 1);
 
   return oldFirstKey === newFirstKey && oldLastKey === newLastKey;
 }
 
 function isSameArray(lenDiff, newItems, key, oldFirstKey, oldLastKey) {
-  if (lenDiff !== 0) {
+  const newItemsLength = get(newItems, 'length');
+
+  if (lenDiff !== 0 || newItemsLength === 0) {
     return false;
   }
 
-  const newFirstKey = keyForItem(newItems[0], key, 0);
-  const newLastKey = keyForItem(newItems[newItems.length - 1], key, newItems.length - 1);
+  const newFirstKey = keyForItem(objectAt(newItems, 0), key, 0);
+  const newLastKey = keyForItem(objectAt(newItems, newItemsLength - 1), key, newItemsLength - 1);
 
   return oldFirstKey === newFirstKey && oldLastKey === newLastKey;
 }

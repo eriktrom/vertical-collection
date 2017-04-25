@@ -1,5 +1,5 @@
-import Token from 'vertical-collection/-private/scheduler/token';
 import Ember from 'ember';
+import { IS_GLIMMER_2 } from 'vertical-collection/-private/ember/compatibility';
 
 import { assert } from 'vertical-collection/-debug/helpers';
 
@@ -9,38 +9,42 @@ const doc = document;
 let VC_IDENTITY = 0;
 
 export default class VirtualComponent {
-  constructor(parentToken) {
-    this._tenureId = VC_IDENTITY++;
-    this.init(parentToken);
-  }
-
-  init(parentToken) {
+  constructor(element) {
     this.id = VC_IDENTITY++;
+
+    this._element = element;
+
     this._upperBound = doc.createTextNode('');
     this._lowerBound = doc.createTextNode('');
-    this.height = 0;
+
     this.content = null;
-    this.inDOM = false;
-    this.token = new Token(parentToken);
+  }
+
+  get element() {
+    return this._element;
   }
 
   get upperBound() {
     return this._upperBound;
   }
 
+  get realUpperBound() {
+    return IS_GLIMMER_2 ? this._upperBound : this._upperBound.previousSibling;
+  }
+
   get lowerBound() {
     return this._lowerBound;
   }
 
-  get parentElement() {
-    return this._upperBound.parentElement;
+  get realLowerBound() {
+    return IS_GLIMMER_2 ? this._lowerBound : this._lowerBound.nextSibling;
   }
 
   getBoundingClientRect() {
     const range = doc.createRange();
 
-    range.setStart(this._upperBound, 0);
-    range.setEnd(this._lowerBound, 0);
+    range.setStartBefore(this._upperBound);
+    range.setEndAfter(this._lowerBound);
 
     const rect = range.getBoundingClientRect();
 
@@ -52,7 +56,9 @@ export default class VirtualComponent {
   recycle(newContent, newIndex) {
     assert(`You cannot set an item's content to undefined`, newContent);
 
-    set(this, 'index', newIndex);
+    if (this.index !== newIndex) {
+      set(this, 'index', newIndex);
+    }
 
     if (this.content !== newContent) {
       set(this, 'content', newContent);
@@ -60,41 +66,9 @@ export default class VirtualComponent {
   }
 
   destroy() {
-    this.token.cancel();
-    this.range.detach();
-    this.range = null;
-
+    this._element = null;
     this._upperBound = null;
     this._lowerBound = null;
-
     set(this, 'content', null);
-  }
-
-  static create(parentToken) {
-    return new VirtualComponent(parentToken);
-  }
-
-  static moveComponents(element, firstComponent, lastComponent, prepend) {
-    const rangeToMove = doc.createRange();
-
-    rangeToMove.setStart(firstComponent._upperBound, 0);
-    rangeToMove.setEnd(lastComponent._lowerBound, 0);
-
-    const docFragment = rangeToMove.extractContents();
-
-    rangeToMove.detach();
-
-    // The first and last nodes in the range do not get extracted, and are instead cloned, so they
-    // have to be reset.
-    //
-    // NOTE: Ember 1.11 - there are cases where docFragment is null (they haven't been rendered yet.)
-    firstComponent._upperBound = docFragment.firstChild || firstComponent._upperBound;
-    lastComponent._lowerBound = docFragment.lastChild || lastComponent._lowerBound;
-
-    if (prepend) {
-      element.insertBefore(docFragment, element.firstChild);
-    } else {
-      element.appendChild(docFragment);
-    }
   }
 }

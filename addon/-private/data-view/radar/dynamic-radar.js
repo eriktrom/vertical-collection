@@ -1,19 +1,14 @@
-import Radar from './index';
+import Radar from './radar';
 import SkipList from '../skip-list';
-import Ember from 'ember';
 
 import { assert } from 'vertical-collection/-debug/helpers';
-
-const { run } = Ember;
 
 export default class DynamicRadar extends Radar {
   init(...args) {
     super.init(...args);
 
-    if (!this.initialized) {
-      this.skipList = new SkipList(this.items.length, this.minHeight);
-      this.initialized = true;
-    }
+    this.skipList = new SkipList(this.totalItems, this.minHeight);
+    this._firstRender = true;
   }
 
   destroy() {
@@ -27,9 +22,17 @@ export default class DynamicRadar extends Radar {
     const maxIndex = this.totalItems - 1;
     const numComponents = this.orderedComponents.length;
     const prevFirstItemIndex = this.firstItemIndex;
+    const prevLastItemIndex = this.lastItemIndex;
     const middleVisibleValue = this.visibleTop + ((this.visibleBottom - this.visibleTop) / 2);
 
-    this._measure(0, numComponents - 1);
+    // Don't measure if the radar has just been instantiated or reset, as we are rendering with a
+    // completely new set of items and won't get an accurate measurement until after they render the
+    // first time.
+    if (prevFirstItemIndex !== null) {
+      // We only need to measure the components that were rendered last time, extra components
+      // haven't rendered yet.
+      this._measure(0, prevLastItemIndex - prevFirstItemIndex);
+    }
 
     let {
       totalBefore,
@@ -58,7 +61,7 @@ export default class DynamicRadar extends Radar {
       totalAfter -= values[i];
     }
 
-    const itemDelta = prevFirstItemIndex ? firstItemIndex - prevFirstItemIndex : 0;
+    const itemDelta = (prevFirstItemIndex !== null) ? firstItemIndex - prevFirstItemIndex : 0;
     const numCulled = Math.abs(itemDelta % numComponents);
 
     if (itemDelta < 0 || this._firstRender) {
@@ -73,10 +76,6 @@ export default class DynamicRadar extends Radar {
       });
     }
 
-    run.next(() => {
-      this._measure(0, numComponents - 1);
-    });
-
     this._firstItemIndex = firstItemIndex;
     this._lastItemIndex = lastItemIndex;
     this._totalBefore = totalBefore;
@@ -90,6 +89,7 @@ export default class DynamicRadar extends Radar {
       firstItemIndex,
       orderedComponents,
       itemContainer,
+      totalBefore,
       skipList
     } = this;
 
@@ -99,10 +99,6 @@ export default class DynamicRadar extends Radar {
       const itemIndex = firstItemIndex + i;
       const currentItem = orderedComponents[i];
       const previousItem = orderedComponents[i - 1];
-
-      if (!currentItem.inDOM) {
-        continue;
-      }
 
       const {
         top: currentItemTop,
@@ -114,7 +110,7 @@ export default class DynamicRadar extends Radar {
       if (previousItem) {
         margin = Math.round(currentItemTop - previousItem.getBoundingClientRect().bottom);
       } else {
-        margin = Math.round(currentItemTop - itemContainer.getBoundingClientRect().top);
+        margin = Math.round(currentItemTop - itemContainer.getBoundingClientRect().top - totalBefore);
       }
 
       assert(`item height must always be above minimum value. Item ${itemIndex} measured: ${currentItemHeight + margin}`, currentItemHeight + margin >= this.minHeight);
@@ -189,28 +185,27 @@ export default class DynamicRadar extends Radar {
     for (let i = lastItemIndex; i >= firstItemIndex; i--) {
       totalAfter += values[i];
 
-      if (total - totalAfter < visibleBottom) {
+      if (total - totalAfter <= visibleBottom) {
         return i;
       }
     }
   }
 
   prepend(items, numPrepended) {
-    this.skipList.prepend(numPrepended);
-
     super.prepend(items, numPrepended);
+
+    this.skipList.prepend(numPrepended);
   }
 
   append(items, numAppended) {
-    this.skipList.append(numAppended);
-
     super.append(items, numAppended);
+
+    this.skipList.append(numAppended);
   }
 
   resetItems(items) {
-    this.skipList = new SkipList(items.length, this.minHeight);
-    this._firstRender = true;
-
     super.resetItems(items);
+
+    this.skipList = new SkipList(this.totalItems, this.minHeight);
   }
 }
