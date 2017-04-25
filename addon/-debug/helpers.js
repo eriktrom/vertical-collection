@@ -1,7 +1,7 @@
 import Ember from 'ember';
 
 const {
-  warn: emberWarn,
+  // warn: emberWarn,
   deprecate: emberDeprecate,
   Logger
 } = Ember;
@@ -11,24 +11,24 @@ export function instrument(cb) {
 }
 
 export function debug() {
-  Logger.debug(...arguments);
+  Logger.info(...arguments);
 }
 
 export function debugOnError(msg, conditional) {
   if (!conditional) {
-    Logger.debug('Vertical Collection - ERROR:', msg); // eslint-disable-line no-console
+    Logger.info('Vertical Collection - ERROR:', msg); // eslint-disable-line no-console
     // debugger; // eslint-disable-line no-debugger
   }
 }
 
 export function assert(msg, conditional) {
   if (!conditional) {
-    Logger.debug('Vertical Collection - BAD ASSERT:', msg); // eslint-disable-line no-console
+    Logger.info('Vertical Collection - BAD ASSERT:', msg); // eslint-disable-line no-console
   }
 }
 
 export function warn() {
-  emberWarn(...arguments);
+  Logger.info(...arguments);
 }
 
 export function deprecate() {
