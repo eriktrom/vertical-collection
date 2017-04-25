@@ -50,10 +50,6 @@ export class Scheduler {
   }
 
   flush() {
-    return this._flushOnce();
-  }
-
-  _flushOnce() {
     let i, q;
 
     run.begin();
@@ -65,10 +61,7 @@ export class Scheduler {
         q[i]();
       }
     }
-    // run.end();
 
-    // not having a run loop here makes the list feel a bit jumpy as it re-measures
-    // run.begin();
     if (this.layout.length) {
       q = this.layout;
       this.layout = [];
@@ -77,9 +70,9 @@ export class Scheduler {
         q[i]();
       }
     }
-    // run.end();
+    run.end();
 
-    // run.begin();
+    run.begin();
     if (this.measure.length) {
       q = this.measure;
       this.measure = [];
@@ -88,9 +81,7 @@ export class Scheduler {
         q[i]();
       }
     }
-    // run.end();
 
-    // run.begin();
     if (this.affect.length) {
       q = this.affect;
       this.affect = [];
