@@ -1,7 +1,7 @@
 import Radar from './radar';
 import SkipList from '../skip-list';
 
-import { assert } from 'vertical-collection/-debug/helpers';
+// import { assert } from 'vertical-collection/-debug/helpers';
 
 export default class DynamicRadar extends Radar {
   init(...args) {
@@ -114,7 +114,7 @@ export default class DynamicRadar extends Radar {
       }
 
       if (!(currentItemHeight + margin >= this.minHeight)) {
-        console.info(`VERTICAL-COLLECTION: item height must always be above minimum value. Item ${itemIndex} measured: ${currentItemHeight + margin}`, currentItemHeight + margin >= this.minHeight);  // eslint-disable-line
+        console.debug(`VERTICAL-COLLECTION: inside dynamicRadar#_measure: item height must always be above minimum value. Item ${itemIndex} measured: ${currentItemHeight + margin}`, currentItemHeight + margin >= this.minHeight);  // eslint-disable-line
       }
 
       const itemDelta = skipList.set(itemIndex, currentItemHeight + margin);

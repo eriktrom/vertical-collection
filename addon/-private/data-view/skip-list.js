@@ -124,7 +124,9 @@ export default class SkipList {
     totalAfter = total - totalBefore;
 
     assert('index must be a number', typeof index === 'number');
-    assert('index must be within bounds', index >= 0 && index < this.values.length);
+    if (!(index >= 0 && index < this.values.length)) {
+      console.debug('VERTICAL-COLLECTION BAD ASSERT - inside skipList#find: index must be within bounds', index >= 0 && index < this.values.length); // eslint-disable-line no-console
+    }
 
     return { index, totalBefore, totalAfter };
   }
@@ -132,7 +134,9 @@ export default class SkipList {
   set(index, value) {
     assert('value must be a number', typeof value === 'number');
     assert('index must be a number', typeof index === 'number');
-    assert('index must be within bounds', index >= 0 && index < this.values.length);
+    if (!(index >= 0 && index < this.values.length)) {
+      console.debug('VERTICAL-COLLECTION BAD ASSERT - inside skipList#set: index must be within bounds', index >= 0 && index < this.values.length); // eslint-disable-line no-console
+    }
 
     const { layers } = this;
     const oldValue = layers[layers.length - 1][index];
