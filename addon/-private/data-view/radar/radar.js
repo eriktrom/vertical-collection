@@ -254,7 +254,7 @@ export default class Radar {
       itemContainer,
       _occludedContentBefore,
       _occludedContentAfter,
-      totalItems,
+      // totalItems,
 
       renderedFirstItemIndex,
       renderedLastItemIndex,
@@ -333,18 +333,18 @@ export default class Radar {
       _componentPool.length = 0;
     }
 
-    const totalItemsBefore = renderedFirstItemIndex;
-    const totalItemsAfter = totalItems - renderedLastItemIndex - 1;
+    // const totalItemsBefore = renderedFirstItemIndex;
+    // const totalItemsAfter = totalItems - renderedLastItemIndex - 1;
 
-    const beforeItemsText = totalItemsBefore === 1 ? 'item' : 'items';
-    const afterItemsText = totalItemsAfter === 1 ? 'item' : 'items';
+    // const beforeItemsText = totalItemsBefore === 1 ? 'item' : 'items';
+    // const afterItemsText = totalItemsAfter === 1 ? 'item' : 'items';
 
     // Set padding element heights, unset itemContainer's minHeight
     _occludedContentBefore.element.style.height = `${renderedTotalBefore}px`;
-    _occludedContentBefore.element.innerHTML = totalItemsBefore > 0 ? `And ${totalItemsBefore} ${beforeItemsText} before` : '';
+    // _occludedContentBefore.element.innerHTML = totalItemsBefore > 0 ? `And ${totalItemsBefore} ${beforeItemsText} before` : '';
 
     _occludedContentAfter.element.style.height = `${renderedTotalAfter}px`;
-    _occludedContentAfter.element.innerHTML = totalItemsAfter > 0 ? `And ${totalItemsAfter} ${afterItemsText} after` : '';
+    // _occludedContentAfter.element.innerHTML = totalItemsAfter > 0 ? `And ${totalItemsAfter} ${afterItemsText} after` : '';
 
     itemContainer.style.minHeight = '';
   }
